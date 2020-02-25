@@ -41,6 +41,7 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 // drift_ub1: 在拼接方向的垂直方向上的错位的上限，以像素为单位。
 // side2: 使用两边做对齐时的第二个对齐边，用法用side1；默认为0，即使用单边对齐
 // overlap_lb2, overlap_ub2, drift_ub2 对应于第二个对齐边相应的值, side2=0时无效
+// return: 0正常；-1：处理中发生异常（此前会导致程序中断）
 //
 // 举例，如需把patch拼到img中roi_ref的右侧，如下图，此时
 // patch中用于对齐的边为左，即side1=side::left
