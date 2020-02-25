@@ -126,6 +126,7 @@ bool connex(const cv::Mat& img, const int* params)
 	return minVal >= params[0] && maxVal <= params[1];
 }
 
+
 void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* ret)
 {
 	double _v[2]{_p[0]-_q[0], _p[1]-_q[1]};
@@ -153,6 +154,12 @@ void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat)
 			alpha,  beta, (1-alpha)*rot[0]-beta*rot[1],
 			-beta, alpha, beta*rot[0]+(1-alpha)*rot[1]);
 }
+
+void apply_rotation_transform(const cv::Mat& src, cv::Mat& dst, const cv::Mat& rmat)
+{
+	cv::warpAffine(src, dst, rmat, src.size());
+}
+
 
 cv::Rect get_template_roi(cv::Size size, int side, int overlap_lb, int overlap_ub, int drift_ub)
 {

@@ -65,20 +65,27 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2=side::none, int overlap_lb2=0, int overlap_ub2=0, int drift_ub2=0);
 
 
-/////////////////////////////////////////////////////////////////
-//                   以下部分未完，待定                        //
-/////////////////////////////////////////////////////////////////
-
-// 通过 marker 位置做旋转对齐矫正，需要两个点 p、q 在旋转前/后的对应坐标
+// 旋转参数计算：通过 marker 位置做旋转对齐矫正，需要两个点 p、q 在旋转前/后的对应坐标
 // _p, _q: 旋转前 p, q 的二维坐标(x,y)的指针
 // p_, q_: 旋转后的坐标
 // rot: 输出的参数，需要五个double，参数值用于计算旋转矩阵
 void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* rot);
 
-// 从旋转参数计算旋转变换矩阵
+// 旋转矩阵计算：从旋转参数计算旋转变换矩阵
 // rot: 旋转参数，即 get_rotation_parameters 输出的数组
 // rmat: 旋转矩阵（输出）
 void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat);
+
+// 旋转变幻
+// src: 需要变换的图像
+// dst: 变换后的输出图像，需要预留内存，尺寸与src相同
+// rmat: 旋转矩阵，从get_rotation_matrix_2d得到
+void apply_rotation_transform(const cv::Mat& src, cv::Mat& dst, const cv::Mat& rmat);
+
+
+/////////////////////////////////////////////////////////////////
+//                   以下部分未完，待定                        //
+/////////////////////////////////////////////////////////////////
 
 // 求灰度图均值
 bool mean(const cv::Mat& gray, const int* params);
