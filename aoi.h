@@ -36,8 +36,8 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 // patch: 新加进去的单张小图
 // roi_patch: 新加的小图在大图中的位置（输出）
 // side1: 小图用于对齐的边的位置，必须；数值参考enum side
-// overlap_lb1: 图像重叠区域尺寸的下限，以像素为单位。（至少重叠 overlap_up 个像素）
-// overlap_ub1: 图像重叠区域尺寸的上限，以像素为单位。（即至多重叠 overlap_up 个像素）
+// overlap_lb1: 图像重叠区域尺寸的下限，以像素为单位。（至少重叠 overlap_lb 个像素）
+// overlap_ub1: 图像重叠区域尺寸的上限，以像素为单位。（至多重叠 overlap_ub 个像素）
 // drift_ub1: 在拼接方向的垂直方向上的错位的上限，以像素为单位。
 // side2: 使用两边做对齐时的第二个对齐边，用法用side1；默认为0，即使用单边对齐
 // overlap_lb2, overlap_ub2, drift_ub2 对应于第二个对齐边相应的值, side2=0时无效
@@ -46,7 +46,7 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 // patch中用于对齐的边为左，即side1=side::left
 // overlap和drift如图所示
 // overlap_lb, overlap_ub, drift_ub 需要根据机械精度做相应的设置
-//  _________________________________________________________
+//  _____________________________________________________________
 // |                         ____________________  ____          |
 // |   img    ______________|_____               | ____ drift    |
 // |         |roi_ref       |     |              |               |
@@ -62,7 +62,7 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 // |                        |<--->| overlap                      |
 // |_____________________________________________________________|
 // 
-void stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2=side::none, int overlap_lb2=0, int overlap_ub2=0, int drift_ub2=0);
+int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2=side::none, int overlap_lb2=0, int overlap_ub2=0, int drift_ub2=0);
 
 
 /////////////////////////////////////////////////////////////////
@@ -70,10 +70,10 @@ void stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rec
 /////////////////////////////////////////////////////////////////
 
 // 通过 marker 位置做旋转对齐矫正，需要两个点 p、q 在旋转前/后的对应坐标
-// _p, _q: 旋转前 p, q 的二维坐标
+// _p, _q: 旋转前 p, q 的二维坐标(x,y)的指针
 // p_, q_: 旋转后的坐标
-// ret: 输出的参数，五个 double
-void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* ret);
+// rot: 输出的参数，需要五个double，参数值用于计算旋转矩阵
+void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* rot);
 
 // 从旋转参数计算旋转变换矩阵
 // rot: 旋转参数，即 get_rotation_parameters 输出的数组

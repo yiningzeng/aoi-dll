@@ -220,12 +220,17 @@ cv::Rect get_search_roi(cv::Rect roi_ref, int side, int overlap_ub)
 	return roi_search;
 }
 
-void stitch_simul(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
+int stitch_simul(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
 {
 	int method = cv::TM_CCOEFF_NORMED;
+	cv::Rect img_region(0, 0, img.cols, img.rows);
 
 	cv::Rect templ1(get_template_roi(patch.size(), side1, overlap_lb1, overlap_ub1, drift_ub1));
 	cv::Rect roi_search1 = get_search_roi(roi_ref, side1, overlap_ub1);
+	if (!img_region.contains(roi_search1.tl()) || !img_region.contains(roi_search1.br()))
+	{
+		return -1;
+	}
 	cv::Mat response1;
 	cv::matchTemplate(img(roi_search1), patch(templ1), response1, method);
 
@@ -233,6 +238,10 @@ void stitch_simul(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, c
 	{
 		cv::Rect templ2(get_template_roi(patch.size(), side2, overlap_lb2, overlap_ub2, drift_ub2));
 		cv::Rect roi_search2(roi_search1.tl() + templ2.tl() - templ1.tl(), roi_search1.size()-templ1.size()+templ2.size());
+		if (!img_region.contains(roi_search2.tl()) || !img_region.contains(roi_search2.br()))
+		{
+			return -1;
+		}
 		cv::Mat response2;
 		cv::matchTemplate(img(roi_search2), patch(templ2), response2, method);
 
@@ -243,12 +252,16 @@ void stitch_simul(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, c
 	cv::minMaxLoc(response1, NULL, NULL, NULL, &tl);
 
 	roi_patch = cv::Rect(roi_search1.tl()+tl-templ1.tl(), patch.size());
+
+	return 0;
 }
 
 #ifdef _OPENMP
-void stitch_simul_omp(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
+int stitch_simul_omp(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
 {
 	int method = cv::TM_CCOEFF_NORMED;
+	int ret = 0;
+	cv::Rect img_region(0, 0, img.cols, img.rows);
 
 	cv::Rect templ1(get_template_roi(patch.size(), side1, overlap_lb1, overlap_ub1, drift_ub1));
 	cv::Rect roi_search1 = get_search_roi(roi_ref, side1, overlap_ub1);
@@ -261,7 +274,15 @@ void stitch_simul_omp(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patc
 		{
 			case 0:
 			{
-				cv::matchTemplate(img(roi_search1), patch(templ1), response1, method);
+				if (!img_region.contains(roi_search1.tl()) || !img_region.contains(roi_search1.br()))
+				{
+					#pragma omp critical 
+					ret = -1;
+				}
+				else
+				{
+					cv::matchTemplate(img(roi_search1), patch(templ1), response1, method);
+				}
 			}
 				break;
 			case 1:
@@ -270,14 +291,26 @@ void stitch_simul_omp(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patc
 				{
 					cv::Rect templ2(get_template_roi(patch.size(), side2, overlap_lb2, overlap_ub2, drift_ub2));
 					cv::Rect roi_search2(roi_search1.tl() + templ2.tl() - templ1.tl(), roi_search1.size()-templ1.size()+templ2.size());
-
-					cv::matchTemplate(img(roi_search2), patch(templ2), response2, method);
+					if (!img_region.contains(roi_search2.tl()) || !img_region.contains(roi_search2.br()))
+					{
+						#pragma omp critical 
+						ret = -1;
+					}
+					else
+					{
+						cv::matchTemplate(img(roi_search2), patch(templ2), response2, method);
+					}
 				}
 			}
 				break;
 			default:
 				break;
 		}
+	}
+
+	if (ret < 0)
+	{
+		return ret;
 	}
 
 	if (side2)
@@ -289,6 +322,8 @@ void stitch_simul_omp(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patc
 	cv::minMaxLoc(response1, NULL, NULL, NULL, &tl);
 
 	roi_patch = cv::Rect(roi_search1.tl()+tl-templ1.tl(), patch.size());
+
+	return ret;
 }
 #endif
 
@@ -342,15 +377,15 @@ void stitch_main_sub(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch
 	roi_patch = cv::Rect(roi_search1.tl()+tl1-templ1.tl(), patch.size());
 }
 
-void stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
+int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
 {
 	assert(side1==side::left||side1==side::up||side1==side::right||side1==side::down);
 	assert(side2==side::none||side2==side::left||side2==side::up||side2==side::right||side2==side::down);
 
 #ifdef _OPENMP
-	stitch_simul_omp(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
+	return stitch_simul_omp(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
 #else
-	stitch_simul(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
+	return stitch_simul(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
 #endif
 }
 
