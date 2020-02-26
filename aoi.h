@@ -77,6 +77,9 @@ void get_rotation_parameters(const double* _p, const double* _q, const double* p
 // rmat: 旋转矩阵（输出）
 void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat);
 
+// 旋转矩阵计算：get_rotation_parameters和get_rotation_matrix_2d的合成，直接从点对计算旋转矩阵；参数含义相同，此略
+void get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat);
+
 // 旋转变幻
 // src: 需要变换的图像
 // dst: 变换后的输出图像，需要预留内存，尺寸与src相同

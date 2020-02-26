@@ -155,6 +155,13 @@ void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat)
 			-beta, alpha, beta*rot[0]+(1-alpha)*rot[1]);
 }
 
+void get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat)
+{
+	double params[5];
+	get_rotation_parameters(_p, _q, p_, q_, params);
+	get_rotation_matrix_2d(params, rmat);
+}
+
 void apply_rotation_transform(const cv::Mat& src, cv::Mat& dst, const cv::Mat& rmat)
 {
 	cv::warpAffine(src, dst, rmat, src.size());
