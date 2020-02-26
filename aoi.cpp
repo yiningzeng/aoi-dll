@@ -126,24 +126,31 @@ bool connex(const cv::Mat& img, const int* params)
 	return minVal >= params[0] && maxVal <= params[1];
 }
 
-
-void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* ret)
+//rot: [cx, cy, cos, sin, scale]
+int get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* rot)
 {
 	double _v[2]{_p[0]-_q[0], _p[1]-_q[1]};
 	double v_[2]{p_[0]-q_[0], p_[1]-q_[1]};
 	double n1 = std::sqrt((_v[0]*_v[0] + _v[1]*_v[1]));
 	double n2 = std::sqrt((v_[0]*v_[0] + v_[1]*v_[1]));
 	double norm = n1 * n2;
-	ret[2] = (_v[0]*v_[0] + _v[1]*v_[1]) / norm;
-	ret[3] = (_v[1]*v_[0] - _v[0]*v_[1]) / norm;
-	ret[4] = n2 / n1;
+	if (norm <= 0)
+	{
+		return -1;
+	}
 
-	cv::Mat R = (cv::Mat_<double>(2,2,CV_64F) << ret[2], ret[3], -ret[3], ret[2]);
+	rot[2] = (_v[0]*v_[0] + _v[1]*v_[1]) / norm;
+	rot[3] = (_v[1]*v_[0] - _v[0]*v_[1]) / norm;
+	rot[4] = n2 / n1;
+
+	cv::Mat R = (cv::Mat_<double>(2,2,CV_64F) << rot[2], rot[3], -rot[3], rot[2]);
 	cv::Mat _c = (cv::Mat_<double>(2,1,CV_64F) << (_p[0]+_q[0])/2, (_p[1]+_q[1])/2);
 	cv::Mat c_ = (cv::Mat_<double>(2,1,CV_64F) << (p_[0]+q_[0])/2, (p_[1]+q_[1])/2);
 
 	cv::Mat c = (R - cv::Mat::eye(2,2,CV_64F)).inv() * (R * _c - c_);
-	*(cv::Point2d*)ret = c.at<cv::Point2d>(0);
+	*(cv::Point2d*)rot = c.at<cv::Point2d>(0);
+
+	return 0;
 }
 
 void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat)
@@ -155,11 +162,17 @@ void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat)
 			-beta, alpha, beta*rot[0]+(1-alpha)*rot[1]);
 }
 
-void get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat)
+int get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat)
 {
 	double params[5];
-	get_rotation_parameters(_p, _q, p_, q_, params);
+	int ret = get_rotation_parameters(_p, _q, p_, q_, params);
+	if (ret < 0)
+	{
+		return ret;
+	}
+
 	get_rotation_matrix_2d(params, rmat);
+	return ret;
 }
 
 void apply_rotation_transform(const cv::Mat& src, cv::Mat& dst, const cv::Mat& rmat)

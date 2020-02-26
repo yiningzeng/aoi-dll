@@ -41,7 +41,7 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 // drift_ub1: 在拼接方向的垂直方向上的错位的上限，以像素为单位。
 // side2: 使用两边做对齐时的第二个对齐边，用法用side1；默认为0，即使用单边对齐
 // overlap_lb2, overlap_ub2, drift_ub2 对应于第二个对齐边相应的值, side2=0时无效
-// return: 0正常；-1：处理中发生异常（此前会导致程序中断）
+// return: 0：正常；-1：处理中发生异常（此前会导致程序中断）
 //
 // 举例，如需把patch拼到img中roi_ref的右侧，如下图，此时
 // patch中用于对齐的边为左，即side1=side::left
@@ -66,11 +66,12 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2=side::none, int overlap_lb2=0, int overlap_ub2=0, int drift_ub2=0);
 
 
-// 旋转参数计算：通过 marker 位置做旋转对齐矫正，需要两个点 p、q 在旋转前/后的对应坐标
+// 旋转参数计算：通过 marker 位置做旋转对齐矫正时用到，需要两个点 p、q 在旋转前/后的对应坐标，p和q的坐标不能相同，否则会引起数值异常
 // _p, _q: 旋转前 p, q 的二维坐标(x,y)的指针
 // p_, q_: 旋转后的坐标
 // rot: 输出的参数，需要五个double，参数值用于计算旋转矩阵
-void get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* rot);
+// return: 0：正常；-1：数值异常
+int get_rotation_parameters(const double* _p, const double* _q, const double* p_, const double* q_, double* rot);
 
 // 旋转矩阵计算：从旋转参数计算旋转变换矩阵
 // rot: 旋转参数，即 get_rotation_parameters 输出的数组
@@ -78,7 +79,7 @@ void get_rotation_parameters(const double* _p, const double* _q, const double* p
 void get_rotation_matrix_2d(const double* rot, cv::Mat& rmat);
 
 // 旋转矩阵计算：get_rotation_parameters和get_rotation_matrix_2d的合成，直接从点对计算旋转矩阵；参数含义相同，此略
-void get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat);
+int get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_, const double* q_, cv::Mat& rmat);
 
 // 旋转变幻
 // src: 需要变换的图像
