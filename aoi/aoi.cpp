@@ -9,6 +9,10 @@
 
 #define INRANGE(VAL, LB, UB) (VAL >= LB &&VAL <= UB)
 
+void copy_to(cv::Mat& img, cv::Mat& patch, const cv::Rect& roi_ref)
+{
+	patch.copyTo(img(roi_ref));
+}
 //params format: lower/upper
 bool mean(const cv::Mat& gray, const int* params)
 {
