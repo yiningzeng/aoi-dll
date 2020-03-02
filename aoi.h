@@ -66,7 +66,7 @@ enum side { none=0, left=1, up=2, right=4, down=8 };
 int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2=side::none, int overlap_lb2=0, int overlap_ub2=0, int drift_ub2=0);
 
 // 图像对齐（使用候选区域左上顶点作为输入参数）
-// img, patch, side1, side2, return 意义同上，此略
+// img, patch, side1, overlap_lb1, side2, overlap_lb2, return 意义同上，此略
 // tl_candidate: 对需要拼接的图像预置的候选区域的左上角顶点位置
 // tl：tl_candidate经算法对齐调整后的值（输出）
 // err_ub: 误差上限，以像素为单位。（tl与tl_candidate在x/y方向上至多偏差err_ub个像素）
