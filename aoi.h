@@ -110,10 +110,15 @@ int get_rotation_matrix_2d(const double* _p, const double* _q, const double* p_,
 
 // 旋转变幻
 // src: 需要变换的图像
-// dst: 变换后的输出图像，需要预留内存，尺寸与src相同
+// dst: 变换后的输出图像，需要预留内存，尺寸、类型与src相同
 // rmat: 旋转矩阵，从get_rotation_matrix_2d得到
 void apply_rotation_transform(const cv::Mat& src, cv::Mat& dst, const cv::Mat& rmat);
 
+// 图像分割（根据颜色分区）
+// src: 输入的待分割图像
+// dst: 输出的分割结果，需要预留内存，尺寸、类型与src相同
+// N: 颜色种类个数（默认为2：前景/背景）
+void segment(const cv::Mat& src, cv::Mat& dst, unsigned N = 2);
 
 /////////////////////////////////////////////////////////////////
 //                   以下部分未完，待定                        //
