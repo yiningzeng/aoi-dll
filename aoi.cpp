@@ -549,6 +549,24 @@ void add_patch(cv::Mat& img, const cv::Point& tl, const cv::Mat& patch)
 	add_patch(img, cv::Rect(tl, patch.size()), patch);
 }
 
+void segment(const cv::Mat& src, cv::Mat& dst, unsigned K)
+{
+	cv::Mat data;
+	src.convertTo(data, CV_MAKETYPE(CV_32F, src.channels()));
+	data = data.reshape(0, src.total());
+
+	cv::TermCriteria criteria(cv::TermCriteria::EPS+cv::TermCriteria::COUNT, 5, 1.0);
+	cv::Mat labels, centers;
+	cv::kmeans(data, K, labels, criteria, 5, cv::KMEANS_PP_CENTERS, centers);
+	labels.convertTo(labels, CV_8U);
+	labels = labels.reshape(0, src.rows);
+
+	for (unsigned i = 0; i < K; ++i)
+	{
+		dst.setTo(centers.row(i), labels == i);
+	}
+}
+
 void take_diff(const cv::Mat& img, const cv::Mat& ref, cv::Mat& diff, int sensitivity, int min_area)
 {
 	cv::bitwise_xor(img, ref, diff);
