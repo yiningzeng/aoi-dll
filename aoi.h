@@ -126,8 +126,10 @@ void segment(const cv::Mat& src, cv::Mat& dst, unsigned N = 2);
 // pos: 匹配结果（输出），目标模板templ在img内的区域的左上角顶点位置
 // binarize: 是否在预处理中加二值化操作，默认不进行(false)
 // method: 匹配度指标
-// return: 匹配结果得分（不大于1）；得分越高说明匹配程度越高；反之，接近0可认为基本不匹配
-double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos=NULL, bool binarize=false, int method=cv::TM_CCOEFF_NORMED);
+// return: 匹配结果得分
+//     method使用默认时，值不大于1；得分越高说明匹配程度越高；反之，接近0可认为基本不匹配
+//     method=1时，值不小于0；得分越低说明匹配程度越高
+double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos=NULL, bool binarize=false, int method=5);
 
 /////////////////////////////////////////////////////////////////
 //                   以下部分未完，待定                        //
