@@ -57,7 +57,7 @@ bool scale(const cv::Mat& gray, const cv::Mat& rgb, const int* params)
 	return INRANGE(percentage, params[8], params[9]);
 }
 
-double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos, bool binarize)
+double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos, bool binarize, int method)
 {
 	cv::Mat result;
 	if(binarize)
@@ -82,7 +82,7 @@ double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos, boo
 
 		double thresh = cv::threshold(img_bin, img_bin, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 		cv::threshold(templ_bin, templ_bin, thresh, 255, cv::THRESH_BINARY);
-		cv::matchTemplate(img_bin, templ_bin, result, cv::TM_CCOEFF_NORMED);
+		cv::matchTemplate(img_bin, templ_bin, result, method);
 	}
 	else
 	{
@@ -97,18 +97,25 @@ double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos, boo
 			{
 				cv::cvtColor(templ, templ_mono, cv::COLOR_BGR2GRAY);
 			}
-			cv::matchTemplate(img_mono, templ_mono, result, cv::TM_CCOEFF_NORMED);
+			cv::matchTemplate(img_mono, templ_mono, result, method);
 		}
 		else
 		{
-			cv::matchTemplate(img, templ, result, cv::TM_CCOEFF_NORMED);
+			cv::matchTemplate(img, templ, result, method);
 		}
 	}
 
-	double maxVal;
-	cv::minMaxLoc(result, NULL, &maxVal, NULL, pos);
+	double score;
+	if(method == cv::TM_SQDIFF || method == cv::TM_SQDIFF_NORMED)
+	{
+		cv::minMaxLoc(result, &score, NULL, pos, NULL);
+	}
+	else
+	{
+		cv::minMaxLoc(result, NULL, &score, NULL, pos);
+	}
 
-	return maxVal;
+	return score;
 }
 
 void histogram(const cv::Mat& gray, const int n_bins, cv::Mat& hist)
