@@ -135,6 +135,22 @@ double image_match(const cv::Mat& img, const cv::Mat& templ, cv::Point* pos=NULL
 //                   以下部分未完，待定                        //
 /////////////////////////////////////////////////////////////////
 
+struct FP0
+{
+	int feature; // 特征类型编号
+	int ks;      // 卷积核尺寸，与图像尺寸成正比
+	float f_lb;  // 特征下限
+	float f_ub;  // 特征上限
+	int a_lb;    // 面积下限
+	int a_ub;    // 面积上限
+};
+// src: 输入图像
+// dst: 输出结果
+// params: 参数结构体指针
+// mask: 目标区域掩码
+// return: 0：正常结束；-1：处理异常
+int feature_filter(const cv::Mat& src, void* dst, const void* const params, const cv::Mat& mask=cv::Mat());
+
 // 求灰度图均值
 bool mean(const cv::Mat& gray, const int* params);
 
