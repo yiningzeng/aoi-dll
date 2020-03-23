@@ -9,6 +9,39 @@
 
 #define INRANGE(VAL, LB, UB) (VAL >= LB &&VAL <= UB)
 
+int feature_filter_csharp(cv::Mat& img, cv::Rect& bbox, FP0 fp) {
+
+	cv::resize(img, img, cv::Size(), 0.5, 0.5);
+	cv::Mat mask(img.size(), img.type());
+	segment(img, mask, 4);
+	cv::cvtColor(mask, mask, cv::COLOR_BGR2GRAY);
+	cv::threshold(mask, mask, 100, 255, cv::THRESH_BINARY);
+	cv::Mat structure_element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(7, 7));
+	cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, structure_element);
+	cv::morphologyEx(mask, mask, cv::MORPH_OPEN, structure_element);
+	structure_element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+	cv::morphologyEx(mask, mask, cv::MORPH_ERODE, structure_element);
+
+	//FP0 params{ 0, 3, 1.25, 2.5, 25, 90000, 16 };
+	return feature_filter(img, &bbox, &fp, mask);
+}
+
+std::vector<cv::Rect> ccbbox(const cv::Mat& img, long long lb = -1, long long ub = -1)
+{
+	cv::Mat labels, stats, centroids;
+	cv::connectedComponentsWithStats(img, labels, stats, centroids, 8, CV_32S);
+	std::vector<cv::Rect> bbox;
+	for (int i = 1; i < stats.rows; ++i)
+	{
+		int* stat = stats.ptr<int>(i);
+		if (lb > 0 && stat[cv::CC_STAT_AREA] < lb) continue;
+		if (ub > 0 && stat[cv::CC_STAT_AREA] > ub) continue;
+
+		bbox.push_back(cv::Rect(stat[cv::CC_STAT_LEFT], stat[cv::CC_STAT_TOP], stat[cv::CC_STAT_WIDTH], stat[cv::CC_STAT_HEIGHT]));
+	}
+	return bbox;
+}
+
 void copy_to(cv::Mat& img, cv::Mat& patch, const cv::Rect& roi_ref)
 {
 	patch.copyTo(img(roi_ref));
@@ -51,6 +84,66 @@ void range_mask(const cv::Mat& gray, const cv::Mat& rgb, cv::Mat& mask, const in
 	cv::inRange(rgb, lower, upper, mask_rgb);
 
 	cv::bitwise_and(mask_rgb, mask_gray, mask);
+}
+
+int feature_filter(const cv::Mat& src, void* dst, const void* const p, const cv::Mat& mask)
+{
+	try
+	{
+		int ft = *(int*)p;
+		switch (ft)
+		{
+		case 0:
+		{
+			cv::Mat rgb;
+			FP0 fp = *(FP0*)p;
+			int bks = fp.ks * 2 - 1;
+			cv::blur(src, rgb, cv::Size(bks, bks));
+
+			std::vector<cv::Mat> channels(3);
+			cv::split(rgb, channels);
+
+			channels[0].setTo(1, channels[0] == 0);
+			cv::Mat r, b;
+			channels[0].convertTo(b, CV_32F);
+			channels[2].convertTo(r, CV_32F);
+
+			cv::Mat& bin = channels[1];
+			cv::inRange(r / b, fp.f_lb, fp.f_ub, bin);
+			cv::Mat structure_element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(fp.ks, fp.ks));
+			cv::morphologyEx(bin, bin, cv::MORPH_CLOSE, structure_element);
+			cv::morphologyEx(bin, bin, cv::MORPH_OPEN, structure_element);
+			if (!mask.empty())
+			{
+				cv::bitwise_and(bin, mask, bin);
+			}
+
+			std::vector<cv::Rect> bbox = ccbbox(bin, fp.a_lb, fp.a_ub);
+			if (bbox.size() > fp.n_boxes)
+			{
+				std::sort(bbox.begin(), bbox.end(), [](cv::Rect& l, cv::Rect& r) {return l.area() > r.area(); });
+				bbox.resize(fp.n_boxes);
+			}
+
+			auto ptr = (cv::Rect*)dst;
+			for (unsigned i = 0; i < fp.n_boxes; ++i)
+			{
+				ptr[i] = i < bbox.size() ? bbox[i] : cv::Rect(0, 0, 0, 0);
+			}
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
+		return 0;
+	}
+	catch (...)
+	{
+		std::cout << "error" << "\n";
+		return -1;
+	}
 }
 
 bool scale(const cv::Mat& gray, const cv::Mat& rgb, const int* params)
