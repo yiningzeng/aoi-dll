@@ -12,7 +12,7 @@
 #include <opencv2/opencv.hpp>
 // 图像拼接用的对齐边的定义
 enum side { none = 0, left = 1, up = 2, right = 4, down = 8 };
-
+int align_relative_simul(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2);
 #ifdef __cplusplus //(内置宏,如果是c++,在编译器预处理的时候加上extern,如果是c语言调用的时候是不处理的)
 extern "C"
 {
@@ -79,20 +79,26 @@ extern "C"
 	// 
 	__declspec(dllexport) int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2 = side::none, int overlap_lb2 = 0, int overlap_ub2 = 0, int drift_ub2 = 0);
 
-	// 图像对齐（使用候选区域左上顶点作为输入参数）
-	// img, patch, side1, overlap_lb1, side2, overlap_lb2, return 意义同上，此略
-	// tl_candidate: 对需要拼接的图像预置的候选区域的左上角顶点位置
-	// tl：tl_candidate经算法对齐调整后的值（输出）
-	// err_ub: 误差上限，以像素为单位。（tl与tl_candidate在x/y方向上至多偏差err_ub个像素）
-	// -err_ub <= (tl - tl_candidate).x <= err_ub && -err_ub <= (tl - tl_candidate).y <= err_ub
+	// 图像对齐（使用重叠区域大小作为输入参数）
+	// img: 拼接后的大图（输出），内存需预留，尺寸足够大，保证新接入的图能够完全放入并留有余量
+	// roi_ref: 用做对齐用的（在大图中已经填充了的）参考区域矩形框，框的范围必须在img尺寸范围内，否则会出错
+	// patch: 新加进去的单张小图
+	// roi_patch: 新加的小图在大图中的位置（输出）
+	// side1: 小图用于对齐的边的位置，必须；数值参考enum side
+	// overlap_lb1: 图像重叠区域尺寸的下限，以像素为单位。（至少重叠 overlap_lb 个像素）
+	// overlap_ub1: 图像重叠区域尺寸的上限，以像素为单位。（至多重叠 overlap_ub 个像素）
+	// drift_ub1: 在拼接方向的垂直方向上的错位的上限，以像素为单位。
+	// side2: 使用两边做对齐时的第二个对齐边，用法用side1；默认为0，即使用单边对齐
+	// overlap_lb2, overlap_ub2, drift_ub2 对应于第二个对齐边相应的值, side2=0时无效
+	// return: 0：正常；-1：处理中发生异常（此前会导致程序中断）
 	//
+	// 举例，如需把patch拼到img中roi_ref的右侧，如下图，此时
+	// patch中用于对齐的边为左，即side1=side::left
+	// overlap和drift如图所示
+	// overlap_lb, overlap_ub, drift_ub 需要根据机械精度做相应的设置
 	//  _____________________________________________________________
-	// |                                                             |
-	// |                   tl_candidate: 候选区域左上角顶点坐标      |
-	// |                        |                                    |
-	// |                       \|/                                   |
-	// |                        .____________________                |
-	// |   img    ______________|_____               |               |
+	// |                         ____________________  ____          |
+	// |   img    ______________|_____               | ____ drift    |
 	// |         |roi_ref       |     |              |               |
 	// |         |              |     |              |               |
 	// |         |              |     |              |               |
@@ -103,9 +109,10 @@ extern "C"
 	// |         |              |_____|______________|               |
 	// |         |____________________|                              |
 	// |                                                             |
+	// |                        |<--->| overlap                      |
 	// |_____________________________________________________________|
 	// 
-	__declspec(dllexport) int stitch_2(cv::Mat& img, const cv::Point& tl_candidate, const cv::Mat& patch, cv::Point& tl, int err_ub, int side1, int overlap_lb1, int side2 = side::none, int overlap_lb2 = 0);
+	__declspec(dllexport) int stitch_v2(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2 = side::none, int overlap_lb2 = 0, int overlap_ub2 = 0, int drift_ub2 = 0);
 
 	// 旋转参数计算：通过 marker 位置做旋转对齐矫正时用到，需要两个点 p、q 在旋转前/后的对应坐标，p和q的坐标不能相同，否则会引起数值异常
 	// _p, _q: 旋转前 p, q 的二维坐标(x,y)的指针
@@ -138,15 +145,30 @@ extern "C"
 	//                   以下部分未完，待定                        //
 	/////////////////////////////////////////////////////////////////
 
+// 氧化类脏污检测
 	struct FP0
 	{
-		int feature;          // 特征类型编号
+		int feature = 0;        // 特征类型编号
+		unsigned n_boxes;     // 输出的bbox个数
 		int ks;               // 卷积核尺寸，与图像尺寸成正比
 		float f_lb;           // 特征下限
 		float f_ub;           // 特征上限
 		int a_lb;             // 面积下限
 		int a_ub;             // 面积上限
+	};
+	// 锡球检测
+	struct FP1
+	{
+		int feature = 1;        // 特征类型编号
 		unsigned n_boxes;     // 输出的bbox个数
+		int ks;               // 卷积核尺寸，与图像尺寸成正比
+		float f_lb;           // 特征下限
+		float f_ub;           // 特征上限
+		int a_lb;             // 面积下限
+		int a_ub;             // 面积上限
+		float rb_lb;
+		float whr_eps;
+		float ar_eps;
 	};
 
 	__declspec(dllexport) int feature_filter_csharp(cv::Mat& img, cv::Rect& bbox, FP0 fp);
@@ -179,8 +201,7 @@ extern "C"
 
 
 
-
-	__declspec(dllexport) void hello(cv::Mat& img);
+	__declspec(dllexport) void crop(cv::Mat& patchOld, const int edge);
 	__declspec(dllexport) void copy_to(cv::Mat& img, cv::Mat& patch, const cv::Rect& roi_ref);
 #ifdef __cplusplus
 }

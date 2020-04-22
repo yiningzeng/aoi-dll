@@ -25,6 +25,21 @@ int feature_filter_csharp(cv::Mat& img, cv::Rect& bbox, FP0 fp) {
 	//FP0 params{ 0, 3, 1.25, 2.5, 25, 90000, 16 };
 	return feature_filter(img, &bbox, &fp, mask);
 }
+int stitch_v2(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect& roi_patch, int side1, int overlap_lb1, int overlap_ub1, int drift_ub1, int side2, int overlap_lb2, int overlap_ub2, int drift_ub2)
+{
+	/*int edge = 2;
+	cv::Rect inner(cv::Point(edge, edge), patchOld.size() - (cv::Size(edge, edge) * 2));
+	cv::Mat patch = patchOld(inner);*/
+
+	assert(side1 == side::left || side1 == side::up || side1 == side::right || side1 == side::down);
+	assert(side2 == side::none || side2 == side::left || side2 == side::up || side2 == side::right || side2 == side::down);
+
+#ifdef _OPENMP
+	return align_relative_simul_omp(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
+#else
+	return align_relative_simul(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
+#endif
+}
 
 std::vector<cv::Rect> ccbbox(const cv::Mat& img, long long lb = -1, long long ub = -1)
 {
@@ -42,9 +57,15 @@ std::vector<cv::Rect> ccbbox(const cv::Mat& img, long long lb = -1, long long ub
 	return bbox;
 }
 
+
 void copy_to(cv::Mat& img, cv::Mat& patch, const cv::Rect& roi_ref)
 {
 	patch.copyTo(img(roi_ref));
+}
+void crop(cv::Mat& patchOld, const int edge) {
+	cv::Rect inner(cv::Point(edge, edge), patchOld.size() - (cv::Size(edge, edge)*2));
+	cv::Mat patch = patchOld(inner);
+	cv::imwrite("c:/test.jpg", patch);
 }
 
 //params format: lower/upper
@@ -95,13 +116,13 @@ int feature_filter(const cv::Mat& src, void* dst, const void* const p, const cv:
 		{
 		case 0:
 		{
-			cv::Mat rgb;
+			cv::Mat bgr;
 			FP0 fp = *(FP0*)p;
-			int bks = fp.ks * 2 - 1;
-			cv::blur(src, rgb, cv::Size(bks, bks));
+			int bks = std::max(fp.ks * 2 - 1, 1);
+			cv::blur(src, bgr, cv::Size(bks, bks));
 
 			std::vector<cv::Mat> channels(3);
-			cv::split(rgb, channels);
+			cv::split(bgr, channels);
 
 			channels[0].setTo(1, channels[0] == 0);
 			cv::Mat r, b;
@@ -119,6 +140,73 @@ int feature_filter(const cv::Mat& src, void* dst, const void* const p, const cv:
 			}
 
 			std::vector<cv::Rect> bbox = ccbbox(bin, fp.a_lb, fp.a_ub);
+			if (bbox.size() > fp.n_boxes)
+			{
+				std::sort(bbox.begin(), bbox.end(), [](cv::Rect& l, cv::Rect& r) {return l.area() > r.area(); });
+				bbox.resize(fp.n_boxes);
+			}
+
+			auto ptr = (cv::Rect*)dst;
+			for (unsigned i = 0; i < fp.n_boxes; ++i)
+			{
+				ptr[i] = i < bbox.size() ? bbox[i] : cv::Rect(0, 0, 0, 0);
+			}
+			break;
+		}
+		case 1:
+		{
+			cv::Mat gray;
+			cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+
+			FP1 fp = *(FP1*)p;
+
+			int bks = std::max(fp.ks * 2 - 1, 3);
+			cv::blur(gray, gray, cv::Size(bks, bks));
+
+			cv::Mat bin;
+			cv::inRange(gray, fp.f_lb, fp.f_ub, bin);
+			cv::Mat structure_element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(fp.ks, fp.ks));
+			cv::morphologyEx(bin, bin, cv::MORPH_CLOSE, structure_element);
+			cv::morphologyEx(bin, bin, cv::MORPH_OPEN, structure_element);
+			if (!mask.empty())
+			{
+				cv::bitwise_and(bin, mask, bin);
+			}
+
+			cv::Mat bgr;
+			src.copyTo(bgr, bin);
+			structure_element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(fp.ks, fp.ks));
+			cv::morphologyEx(bgr, bgr, cv::MORPH_CLOSE, structure_element);
+			std::vector<cv::Mat> channels(3);
+			cv::split(bgr, channels);
+
+			channels[0].setTo(1, channels[0] == 0);
+			cv::Mat r, b;
+			channels[0].convertTo(b, CV_32F);
+			channels[2].convertTo(r, CV_32F);
+
+			cv::Mat redish = r / b > fp.rb_lb;
+			cv::morphologyEx(redish, redish, cv::MORPH_CLOSE, structure_element);
+			bin.setTo(0, redish);
+
+			std::vector<cv::Rect> bbox = ccbbox(bin, fp.a_lb, fp.a_ub);
+			for (unsigned i = 0; i < bbox.size(); )
+			{
+				double whr = double(bbox[i].width) / bbox[i].height;
+				if (std::abs(whr - 1) > fp.whr_eps)
+				{
+					bbox.erase(bbox.begin() + i);
+					continue;
+				}
+				double ar = double(bbox[i].width * bbox[i].height) / bbox[i].area();
+				if (std::abs(ar - 4 / CV_PI) > fp.ar_eps)
+				{
+					bbox.erase(bbox.begin() + i);
+					continue;
+				}
+				++i;
+			}
+
 			if (bbox.size() > fp.n_boxes)
 			{
 				std::sort(bbox.begin(), bbox.end(), [](cv::Rect& l, cv::Rect& r) {return l.area() > r.area(); });
@@ -516,6 +604,8 @@ int stitch(cv::Mat& img, const cv::Rect& roi_ref, const cv::Mat& patch, cv::Rect
 	return align_relative_simul(img, roi_ref, patch, roi_patch, side1, overlap_lb1, overlap_ub1, drift_ub1, side2, overlap_lb2, overlap_ub2, drift_ub2);
 #endif
 }
+
+
 
 int align_absolute_simul(cv::Mat& img, const cv::Point& tl_candidate, const cv::Mat& patch, cv::Point& tl, int err_ub, int side1, int overlap_lb1, int side2, int overlap_lb2)
 {
